@@ -1,0 +1,8 @@
+# build output
+/main
+/webscraper
+*.exe
+
+# scrape output
+articles.csv
+*.csv

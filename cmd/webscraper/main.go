@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/csv"
+	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -10,46 +11,48 @@ import (
 )
 
 func main() {
-	const totalPages = 9526
-	baseURL := "https://24.sapo.pt/atualidade?pagina=%d"
+	pages := flag.Int("pages", 9526, "number of archive pages to scrape")
+	out := flag.String("out", "articles.csv", "path of the CSV file to write")
+	base := flag.String("base", "https://24.sapo.pt/atualidade?pagina=%d", "archive URL template with %d for the page number")
+	flag.Parse()
 
-	file, err := os.Create("articles.csv")
+	file, err := os.Create(*out)
 	if err != nil {
-		log.Fatalf("Failed to create CSV file: %v", err)
+		log.Fatalf("failed to create %s: %v", *out, err)
 	}
 	defer file.Close()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	err = writer.Write([]string{"Date", "Title", "Link", "Description"})
-	if err != nil {
-		log.Fatalf("Error writing CSV header: %v", err)
+	if err := writer.Write([]string{"Date", "Title", "Link", "Description"}); err != nil {
+		log.Fatalf("failed to write CSV header: %v", err)
 	}
 
-	for page := 1; page <= totalPages; page++ {
-		url := fmt.Sprintf(baseURL, page)
-		log.Printf("Scraping page %d of %d: %s", page, totalPages, url)
+	articles := 0
+	for page := 1; page <= *pages; page++ {
+		url := fmt.Sprintf(*base, page)
+		log.Printf("scraping page %d/%d", page, *pages)
 
-		articles, err := scraper.ScrapeArticles(url)
+		found, err := scraper.ScrapeArticles(url)
 		if err != nil {
-			log.Printf("Error scraping page %d: %v", page, err)
-			continue // Skip this page
+			log.Printf("page %d failed: %v", page, err)
+			continue
 		}
 
-		for _, a := range articles {
+		for _, a := range found {
 			row := []string{
 				a.Date().Format("2006-01-02 15:04:05"),
 				a.Title,
 				a.Link,
 				a.Description,
 			}
-			err := writer.Write(row)
-			if err != nil {
-				log.Printf("Error writing row from page %d: %v", page, err)
+			if err := writer.Write(row); err != nil {
+				log.Printf("page %d: failed to write row: %v", page, err)
 			}
 		}
+		articles += len(found)
 	}
 
-	log.Println("✅ All pages scraped. CSV file 'articles.csv' created successfully.")
+	log.Printf("done: %d articles written to %s", articles, *out)
 }
